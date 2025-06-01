@@ -55,7 +55,7 @@ Good question! Sometimes you want to practice without opening a browser, or you'
 
 - Might flicker slightly on some terminals (working on it)
 - No support for custom word lists yet (maybe in v2?)
-- Better difficulty selection \ games 
+- Todo: Better difficulty selection \ games 
 
 ## Contributing
 
