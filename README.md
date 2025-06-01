@@ -16,6 +16,9 @@ I got tired of switching to web browsers just to practice typing, so I built thi
 ## Quick Start
 
 ```bash
+# Clone Repo
+git clone https://github.com/aleare/TypeRaceGame.git
+
 # Install requirements
 pip install colorama keyboard matplotlib
 
