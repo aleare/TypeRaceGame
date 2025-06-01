@@ -8,10 +8,9 @@ I got tired of switching to web browsers just to practice typing, so I built thi
 
 ## Features
 
-- **60 words per test** from a mix of difficulty levels
 - **Real-time feedback** - correct letters in green, mistakes in red
-- **Live WPM tracking** and accuracy percentage
-- **Performance graph** showing your speed over time
+- **Live WPM tracking** and accuracy percentage  
+- **Performance graphs** showing speed and accuracy over time
 
 ## Quick Start
 
@@ -25,11 +24,29 @@ cd .\TypeRaceGame\
 # Install requirements
 pip install colorama keyboard matplotlib
 
-# Run the game
+# Run the game (default: 60 second test)
 python typegame.py
 ```
 
 That's it! Start typing to begin the test.
+
+## Command Line Options
+
+```bash
+python typegame.py [duration] [pbfile]
+```
+
+**Arguments:**
+- `duration` - Test duration in seconds (default: 60)
+- `pbfile` - Personal best record file path (default: personal_best.txt)
+
+**Examples:**
+```bash
+python typegame.py                      # 60 second test, default PB file
+python typegame.py 30                   # 30 second test
+python typegame.py 90 work_pb.txt       # 90 second test, custom PB file
+python typegame.py 120 ~/typing/pb.txt  # 2 minute test, custom path
+```
 
 ## Controls
 

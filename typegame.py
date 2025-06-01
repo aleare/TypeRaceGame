@@ -18,6 +18,8 @@ import time
 import threading
 import os
 import sys
+import subprocess
+import argparse
 from collections import deque
 from typing import List, Optional
 from colorama import Fore, Back, Style
@@ -25,12 +27,13 @@ import matplotlib.pyplot as plt
 import keyboard
 
 # Constants
-TEST_DURATION = 60  # seconds
-DEFAULT_WORD_COUNT = 60
+TEST_DURATION = 60  # seconds (will be updated by command line args)
+DEFAULT_WORD_COUNT = 60  # Base word count for 60 second test
 CHARS_PER_WORD = 5
 WPM_TRACKING_INTERVAL = 1
 MAX_WPM_HISTORY = 60
 PLOT_FILENAME = 'typing_speed_plot.png'
+PB_FILENAME = 'personal_best.txt'
 MOVING_AVERAGE_WINDOW = 5
 
 
@@ -60,6 +63,7 @@ check_and_import_dependencies()
 # Word dictionary with categories for typing test
 WORD_DICTIONARY = {
     "common": [
+        # Most frequent English words (1-3 letters, very basic)
         "the", "be", "of", "and", "a", "to", "in", "he", "have", "it", "that", "for", 
         "they", "with", "as", "not", "on", "she", "at", "by", "this", "we", "you", 
         "do", "but", "from", "or", "which", "one", "would", "all", "will", "there", 
@@ -69,11 +73,15 @@ WORD_DICTIONARY = {
         "come", "came", "give", "gave", "take", "took", "know", "knew", "think", "thought",
         "tell", "told", "feel", "felt", "find", "found", "keep", "kept", "let", "put",
         "run", "ran", "walk", "walked", "talk", "talked", "work", "worked", "play", "played",
-        "help", "helped", "want", "wanted", "need", "needed", "try", "tried", "ask", "asked"
+        "help", "helped", "want", "wanted", "need", "needed", "try", "tried", "ask", "asked",
+        "old", "new", "first", "last", "long", "great", "little", "own", "other", "right",
+        "big", "high", "different", "small", "large", "next", "early", "young", "important",
+        "few", "public", "bad", "same", "able", "call", "use", "her", "each", "which"
     ],
     "medium": [
-        "about", "than", "into", "could", "state", "only", "new", "year", "some", 
-        "take", "come", "these", "know", "see", "use", "get", "like", "then", "first", 
+        # Common words (4-7 letters, moderate frequency)
+        "about", "than", "into", "could", "state", "only", "year", "some", 
+        "take", "come", "these", "know", "like", "then", "first", 
         "any", "work", "now", "may", "such", "give", "over", "think", "most", "even", 
         "find", "day", "also", "after", "way", "many", "must", "look", "before",
         "being", "going", "doing", "having", "making", "getting", "coming", "looking",
@@ -81,21 +89,28 @@ WORD_DICTIONARY = {
         "learning", "teaching", "reading", "writing", "listening", "speaking", "watching", "playing",
         "living", "moving", "walking", "running", "sitting", "standing", "sleeping", "eating",
         "drinking", "cooking", "cleaning", "building", "creating", "designing", "planning", "organizing",
-        "managing", "leading", "following", "understanding", "explaining", "describing", "discussing", "arguing"
+        "managing", "leading", "following", "understanding", "explaining", "describing", "discussing", "arguing",
+        "house", "water", "school", "family", "story", "money", "place", "music", "where",
+        "person", "today", "always", "every", "world", "still", "between", "during", "example",
+        "without", "system", "group", "often", "around", "problem", "rather", "enough", "quite"
     ],
     "advanced": [
-        "great", "back", "through", "long", "where", "much", "should", "well", 
-        "people", "down", "own", "just", "because", "good", "each", "those", "feel", 
-        "seem", "how", "high", "too", "place", "little", "world", "very", "still",
+        # More complex words (6-10 letters, lower frequency)
+        "through", "should", "people", "because", "good", "each", "those", 
+        "seem", "place", "little", "world", "very", "still", "back", "down", "where", "much", "well",
         "important", "different", "large", "small", "local", "certain", "available", "political",
         "economic", "social", "national", "international", "personal", "professional", "educational", "medical",
         "financial", "cultural", "historical", "scientific", "technological", "environmental", "psychological", "philosophical",
         "beautiful", "wonderful", "excellent", "amazing", "incredible", "fantastic", "outstanding", "remarkable",
         "significant", "substantial", "considerable", "enormous", "tremendous", "extraordinary", "magnificent", "spectacular",
         "challenging", "difficult", "complex", "complicated", "sophisticated", "advanced", "innovative", "creative",
-        "effective", "efficient", "successful", "powerful", "influential", "important", "necessary", "essential"
+        "effective", "efficient", "successful", "powerful", "influential", "necessary", "essential", "potential",
+        "community", "development", "government", "education", "business", "service", "research", "information",
+        "technology", "experience", "industry", "economic", "society", "organization", "university", "literature",
+        "security", "decision", "relationship", "knowledge", "opportunity", "management", "particular", "political"
     ],
     "technical": [
+        # Programming and technology terms
         "program", "system", "computer", "software", "hardware", "network", "database", 
         "algorithm", "function", "variable", "method", "class", "object", "string", 
         "integer", "boolean", "array", "loop", "condition", "exception", "interface",
@@ -106,19 +121,13 @@ WORD_DICTIONARY = {
         "feature", "bugfix", "patch", "release", "update", "upgrade", "migration", "backup",
         "restore", "monitor", "analyze", "optimize", "performance", "scalability", "reliability", "availability",
         "architecture", "design", "pattern", "principle", "methodology", "practice", "standard", "convention",
-        "api", "url", "http", "https", "json", "xml", "html", "css", "javascript", "python"
+        "api", "url", "http", "https", "json", "xml", "html", "css", "javascript", "python",
+        "developer", "programming", "application", "infrastructure", "middleware", "frontend", "backend", "database",
+        "machine", "learning", "artificial", "intelligence", "cloud", "container", "kubernetes", "docker",
+        "microservice", "bandwidth", "firewall", "router", "switch", "ethernet", "wireless", "bluetooth"
     ],
     "challenging": [
-        "nation", "hand", "old", "life", "tell", "write", "become", "here", "show", 
-        "house", "both", "between", "need", "mean", "call", "develop", "under", "last", 
-        "right", "move", "thing", "general", "school", "never", "same", "another", 
-        "begin", "while", "number", "part", "turn", "real", "leave", "might", "want", 
-        "point", "form", "off", "child", "few", "small", "since", "against", "ask", 
-        "late", "home", "interest", "large", "person", "end", "open", "public", 
-        "follow", "during", "present", "without", "again", "hold", "govern", "around", 
-        "possible", "head", "consider", "word", "problem", "however", "lead", "set", 
-        "order", "eye", "plan", "run", "keep", "face", "fact", "group", "play", 
-        "stand", "increase", "early", "course", "change", "help", "line",
+        # Very long and complex words (8+ letters, specialized vocabulary)
         "character", "experience", "relationship", "responsibility", "opportunity", "communication", "organization", "information",
         "administration", "recommendation", "investigation", "presentation", "representation", "interpretation", "implementation", "demonstration",
         "concentration", "consideration", "determination", "explanation", "preparation", "registration", "celebration", "observation",
@@ -127,7 +136,11 @@ WORD_DICTIONARY = {
         "knowledge", "intelligence", "excellence", "performance", "appearance", "difference", "reference", "preference",
         "conference", "influence", "violence", "evidence", "confidence", "independence", "dependence", "existence",
         "resistance", "assistance", "persistence", "consistency", "efficiency", "proficiency", "sufficiency", "deficiency",
-        "democracy", "bureaucracy", "aristocracy", "meritocracy", "philosophy", "psychology", "technology", "biology"
+        "democracy", "bureaucracy", "aristocracy", "meritocracy", "philosophy", "psychology", "technology", "biology",
+        "extraordinary", "responsibility", "incomprehensible", "transformation", "revolutionary", "multiplication", "characterization",
+        "internationalization", "constitutionality", "interdisciplinary", "entrepreneurship", "telecommunications", "manufacturing",
+        "pharmaceutical", "sustainability", "metropolitan", "congressional", "contemporary", "retrospective", "comprehensive",
+        "cardiovascular", "administrative", "sophisticated", "complementary", "unprecedented", "archaeological", "geographical"
     ]
 }
 
@@ -144,18 +157,39 @@ class GameStats:
         self.total_chars = 0
         self.wpm_data = deque(maxlen=MAX_WPM_HISTORY)
         self.time_stamps = deque(maxlen=MAX_WPM_HISTORY)
+        self.accuracy_data = deque(maxlen=MAX_WPM_HISTORY)
         self.words_typed_correctly: List[bool] = []
+        # Track accuracy for each character position (first attempt only)
+        self.char_accuracy_map: dict = {}  # (word_index, char_index) -> bool
+        # Simple accuracy tracking - starts at 100%, can only decrease
+        self.current_accuracy = 100.0
     
     def add_wpm_data_point(self, wpm: float, elapsed_time: float):
         """Add a WPM data point for tracking."""
         self.wpm_data.append(wpm)
         self.time_stamps.append(elapsed_time)
+        # Also track accuracy at this point
+        accuracy = self.calculate_accuracy()
+        self.accuracy_data.append(accuracy)
+    
+    def record_character_attempt(self, word_index: int, char_index: int, is_correct: bool):
+        """Record the first attempt at typing a character position."""
+        position_key = (word_index, char_index)
+        if position_key not in self.char_accuracy_map:
+            # Only record the first attempt
+            self.char_accuracy_map[position_key] = is_correct
+            self.total_chars += 1
+            if is_correct:
+                self.correct_chars += 1
+            
+            # Calculate current real accuracy and only update if it's lower
+            if self.total_chars > 0:
+                real_accuracy = (self.correct_chars / self.total_chars) * 100
+                self.current_accuracy = min(self.current_accuracy, real_accuracy)
     
     def calculate_accuracy(self) -> float:
-        """Calculate typing accuracy percentage."""
-        if self.total_chars == 0:
-            return 100.0
-        return (self.correct_chars / self.total_chars) * 100
+        """Calculate typing accuracy percentage - can only decrease."""
+        return self.current_accuracy
     
     def get_words_completed(self) -> int:
         """Get number of words typed correctly."""
@@ -173,18 +207,19 @@ class DisplayManager:
     @staticmethod
     def move_cursor_to_top():
         """Move cursor to top of screen without clearing."""
+        # For Windows, we'll use a more reliable method
         if os.name == 'nt':
-            # Windows
-            print('\033[H', end='')
+            # Windows - use cls for more reliable clearing
+            os.system('cls')
         else:
             # Unix/Linux/Mac
-            print('\033[H', end='')
+            print('\033[H\033[2J', end='')
     
     @staticmethod
     def display_header(is_test_active: bool, start_time: Optional[float] = None):
         """Display the game header with timer information."""
         print(f"{Fore.CYAN}=== TYPING RACE TEST ==={Style.RESET_ALL}")
-        print(f"{Fore.YELLOW}Press ESC to quit | TAB+ENTER to restart{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Press ESC to quit | TAB to restart{Style.RESET_ALL}")
         
         if is_test_active and start_time:
             elapsed = time.time() - start_time
@@ -192,6 +227,7 @@ class DisplayManager:
             print(f"{Fore.MAGENTA}Time remaining: {remaining:.1f}s{Style.RESET_ALL}")
         else:
             print(f"{Fore.GREEN}Start typing to begin the test!{Style.RESET_ALL}")
+        print()  # Add spacing
     
     @staticmethod
     def display_words_with_progress(
@@ -203,9 +239,11 @@ class DisplayManager:
         typed_chars: List[str]
     ):
         """Display words with color-coded progress."""
-        print("\n" + "="*50)
+        print("=" * 60)
         
         display_text = ""
+        words_per_line = 10  # Show 10 words per line for better formatting
+        
         for i, word in enumerate(words):
             if i < current_word_index:
                 # Word already completed
@@ -216,7 +254,7 @@ class DisplayManager:
             elif i == current_word_index:
                 # Current word being typed
                 if current_char_index == 0:
-                    display_text += f"{Back.BLUE}{word}{Style.RESET_ALL} "
+                    display_text += f"{Back.BLUE}{Fore.WHITE}{word}{Style.RESET_ALL} "
                 else:
                     typed_part = ''.join(typed_chars)
                     
@@ -238,23 +276,29 @@ class DisplayManager:
                     if current_word_correct:
                         display_text += f"{Fore.GREEN}{correct_part}{Style.RESET_ALL}"
                     else:
-                        display_text += f"{Fore.GREEN}{correct_part}{Style.RESET_ALL}{Fore.RED}{incorrect_part}{Style.RESET_ALL}"
+                        display_text += f"{Fore.GREEN}{correct_part}{Style.RESET_ALL}{Back.RED}{Fore.WHITE}{incorrect_part}{Style.RESET_ALL}"
                     
                     if remaining_part:
-                        display_text += f"{Back.BLUE}{remaining_part}{Style.RESET_ALL} "
+                        display_text += f"{Back.BLUE}{Fore.WHITE}{remaining_part}{Style.RESET_ALL} "
                     else:
                         display_text += " "
             else:
                 # Words not yet reached
                 display_text += f"{Fore.WHITE}{word}{Style.RESET_ALL} "
+            
+            # Add line break every 10 words for better readability
+            if (i + 1) % words_per_line == 0:
+                display_text += "\n"
         
         print(display_text)
-        print("\n" + "="*50)
+        print("=" * 60)
+        print()  # Add spacing
     
     @staticmethod
     def display_current_stats(wpm: float, accuracy: float):
         """Display current typing statistics."""
         print(f"{Fore.CYAN}Current WPM: {wpm:.1f} | Accuracy: {accuracy:.1f}%{Style.RESET_ALL}")
+        print()  # Add spacing
     
     @staticmethod
     def display_final_results(
@@ -269,46 +313,84 @@ class DisplayManager:
         print(f"{Fore.YELLOW}Accuracy: {accuracy:.1f}%{Style.RESET_ALL}")
         print(f"{Fore.MAGENTA}Test Duration: {elapsed_time:.1f} seconds{Style.RESET_ALL}")
         print(f"{Fore.BLUE}Words Completed: {words_completed}{Style.RESET_ALL}")
-        print(f"\n{Fore.YELLOW}Press TAB+ENTER to restart or ESC to quit{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}Press TAB to restart or ESC to quit{Style.RESET_ALL}")
 
 
 class PlotManager:
     """Handles matplotlib plotting operations."""
     
     @staticmethod
-    def create_wpm_plot(wpm_data: deque, time_stamps: deque) -> bool:
-        """Create and display WPM progression plot."""
+    def create_wpm_plot(wpm_data: deque, time_stamps: deque, accuracy_data: deque) -> bool:
+        """Create and display WPM progression plot with accuracy."""
         if len(wpm_data) < 2:
             return False
         
         try:
-            plt.figure(figsize=(12, 6))
+            # Use non-interactive backend to avoid threading issues
+            import matplotlib
+            matplotlib.use('Agg')  # Use non-GUI backend
+            
+            # Create subplot layout: WPM on top, accuracy on bottom
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
             
             times = list(time_stamps)
             wpm_values = list(wpm_data)
+            accuracy_values = list(accuracy_data)
             
-            # Plot instantaneous WPM
-            plt.plot(times, wpm_values, 'b-', linewidth=1, alpha=0.7, label='Instantaneous WPM')
+            # Top plot: WPM
+            ax1.plot(times, wpm_values, 'b-', linewidth=1, alpha=0.7, label='Raw WPM')
             
-            # Calculate and plot moving average
+            # Calculate and plot moving average for WPM
             if len(wpm_values) >= MOVING_AVERAGE_WINDOW:
                 moving_avg = PlotManager._calculate_moving_average(wpm_values, MOVING_AVERAGE_WINDOW)
-                plt.plot(times, moving_avg, 'r-', linewidth=2, label=f'Moving Average ({MOVING_AVERAGE_WINDOW}s)')
+                ax1.plot(times, moving_avg, 'r-', linewidth=2, label='Average WPM')
             
-            plt.xlabel('Time (seconds)')
-            plt.ylabel('Words Per Minute (WPM)')
-            plt.title('Typing Speed Performance')
-            plt.grid(True, alpha=0.3)
-            plt.legend()
+            ax1.set_ylabel('Words Per Minute (WPM)')
+            ax1.set_title('Typing Speed Performance')
+            ax1.grid(True, alpha=0.3)
+            ax1.legend()
+            ax1.set_ylim(0, 130)
+            
+            # Bottom plot: Accuracy
+            ax2.plot(times, accuracy_values, 'g-', linewidth=2, label='Accuracy')
+            
+            # Calculate and plot moving average for accuracy
+            if len(accuracy_values) >= MOVING_AVERAGE_WINDOW:
+                accuracy_moving_avg = PlotManager._calculate_moving_average(accuracy_values, MOVING_AVERAGE_WINDOW)
+                ax2.plot(times, accuracy_moving_avg, 'orange', linewidth=2, label='Average Accuracy')
+            
+            ax2.set_xlabel('Time (seconds)')
+            ax2.set_ylabel('Accuracy (%)')
+            ax2.set_title('Typing Accuracy')
+            ax2.grid(True, alpha=0.3)
+            ax2.legend()
+            ax2.set_ylim(0, 100)
+            
             plt.tight_layout()
             
-            # Show plot and keep window open
-            plt.show()
+            # Save plot instead of showing it to avoid threading issues
+            plt.savefig(PLOT_FILENAME, dpi=300, bbox_inches='tight')
+            plt.close()  # Close the figure to free memory
+            
+            print(f"{Fore.GREEN}WPM plot saved as '{PLOT_FILENAME}'{Style.RESET_ALL}")
+            
+            # Open the saved plot image using the system's default image viewer
+            try:
+                if os.name == 'nt':  # Windows
+                    os.startfile(PLOT_FILENAME)
+                elif os.name == 'posix':  # macOS and Linux
+                    if sys.platform == 'darwin':  # macOS
+                        subprocess.run(['open', PLOT_FILENAME])
+                    else:  # Linux
+                        subprocess.run(['xdg-open', PLOT_FILENAME])
+                print(f"{Fore.CYAN}Opening your typing speed chart...{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.YELLOW}Chart saved as '{PLOT_FILENAME}' - please open manually{Style.RESET_ALL}")
             
             return True
             
         except Exception as e:
-            print(f"{Fore.RED}Could not display plot: {e}{Style.RESET_ALL}")
+            print(f"{Fore.RED}Could not create plot: {e}{Style.RESET_ALL}")
             return False
     
     @staticmethod
@@ -353,8 +435,43 @@ class TypingRaceGame:
         # Thread safety
         self._stats_lock = threading.Lock()
         
-    def generate_words(self, count: int = DEFAULT_WORD_COUNT, difficulty: str = "mixed"):
+        # Load personal best
+        self.personal_best = self.load_personal_best()
+        
+    def load_personal_best(self) -> float:
+        """Load personal best WPM from file."""
+        try:
+            if os.path.exists(PB_FILENAME):
+                with open(PB_FILENAME, 'r') as f:
+                    return float(f.read().strip())
+        except Exception:
+            pass
+        return 0.0
+    
+    def save_personal_best(self, wpm: float):
+        """Save new personal best WPM to file."""
+        try:
+            with open(PB_FILENAME, 'w') as f:
+                f.write(f"{wpm:.1f}")
+        except Exception as e:
+            print(f"{Fore.RED}Could not save personal best: {e}{Style.RESET_ALL}")
+    
+    def check_and_update_personal_best(self, final_wpm: float) -> tuple[bool, float]:
+        """Check if current score is a new personal best and update if so."""
+        old_best = self.personal_best
+        if final_wpm > self.personal_best:
+            self.personal_best = final_wpm
+            self.save_personal_best(final_wpm)
+            return True, old_best
+        return False, old_best
+    
+    def generate_words(self, count: int = None, difficulty: str = "mixed"):
         """Generate random words for the typing test."""
+        # Calculate word count based on test duration if not specified
+        if count is None:
+            # Scale words based on test duration (1 word per second as baseline)
+            count = max(30, int(TEST_DURATION * 1.0))  # Minimum 30 words, scale with duration
+        
         if difficulty == "mixed":
             # Mix words from different categories
             all_words = []
@@ -403,8 +520,8 @@ class TypingRaceGame:
     
     def display_game_state(self):
         """Display the current game state."""
-        # Use cursor positioning instead of clearing screen to reduce flicker
-        self.display.move_cursor_to_top()
+        # Use full screen clearing for reliable display on all platforms
+        self.display.clear_screen()
         self.display.display_header(self.is_test_active, self.start_time)
         self.display.display_words_with_progress(
             self.words, self.current_word_index, self.current_char_index,
@@ -415,9 +532,6 @@ class TypingRaceGame:
             current_wpm = self.calculate_current_wpm()
             accuracy = self.stats.calculate_accuracy()
             self.display.display_current_stats(current_wpm, accuracy)
-        
-        # Clear any remaining lines from previous display
-        print('\033[J', end='')  # Clear from cursor to end of screen
     
     def start_timer(self):
         """Start the test timer and tracking threads."""
@@ -464,11 +578,29 @@ class TypingRaceGame:
         elapsed_time = time.time() - self.start_time if self.start_time else 0.0
         words_completed = self.stats.get_words_completed()
         
+        # Check for personal best
+        is_new_pb, old_best = self.check_and_update_personal_best(final_wpm)
+        
         self.display.display_final_results(final_wpm, accuracy, elapsed_time, words_completed)
         
-        # Create WPM plot
+        # Display personal best information
+        if is_new_pb:
+            print(f"{Fore.YELLOW}🎉 NEW PERSONAL BEST! 🎉{Style.RESET_ALL}")
+            if old_best > 0:
+                print(f"{Fore.GREEN}Previous best: {old_best:.1f} WPM{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.CYAN}Personal Best: {self.personal_best:.1f} WPM{Style.RESET_ALL}")
+            if self.personal_best > final_wpm:
+                difference = self.personal_best - final_wpm
+                print(f"{Fore.YELLOW}You're {difference:.1f} WPM away from your best!{Style.RESET_ALL}")
+        print()
+        
+        # Create WPM plot and save it
         with self._stats_lock:
-            self.plot_manager.create_wpm_plot(self.stats.wpm_data, self.stats.time_stamps)
+            plot_created = self.plot_manager.create_wpm_plot(self.stats.wpm_data, self.stats.time_stamps, self.stats.accuracy_data)
+            if plot_created:
+                print(f"{Fore.CYAN}Your typing speed chart has been saved to view your progress!{Style.RESET_ALL}")
+            print()
     
     def handle_keypress(self, key: str) -> bool:
         """Handle individual keypress events."""
@@ -535,18 +667,21 @@ class TypingRaceGame:
     
     def _handle_character_key(self, key: str, current_word: str):
         """Handle regular character key press."""
-        with self._stats_lock:
-            self.stats.total_chars += 1
-            
-            # Add the typed character to our tracking
-            self.typed_chars.append(key)
-            
-            if (self.current_char_index < len(current_word) and 
-                key == current_word[self.current_char_index]):
-                self.stats.correct_chars += 1
-            
-            self.current_char_index += 1
+        # Add the typed character to our tracking
+        self.typed_chars.append(key)
         
+        # Check if this character is correct and record first attempt for accuracy
+        is_correct = (self.current_char_index < len(current_word) and 
+                     key == current_word[self.current_char_index])
+        
+        with self._stats_lock:
+            self.stats.record_character_attempt(
+                self.current_word_index, 
+                self.current_char_index, 
+                is_correct
+            )
+        
+        self.current_char_index += 1
         self._check_current_word_correctness()
     
     def _check_current_word_correctness(self):
@@ -585,14 +720,15 @@ class TypingRaceGame:
         """Main game loop."""
         self.display.clear_screen()
         print(f"{Fore.CYAN}Welcome to Python Typing Race!{Style.RESET_ALL}")
-        print(f"{Fore.YELLOW}Available word categories: common, medium, advanced, technical, challenging, mixed{Style.RESET_ALL}")
-        print(f"{Fore.YELLOW}Generating 60 words from mixed categories...{Style.RESET_ALL}")
+        
+        # Calculate and display word count
+        word_count = max(30, int(TEST_DURATION * 1.0))
+        print(f"{Fore.YELLOW}Test Duration: {TEST_DURATION}s | Word Count: {word_count} words{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Generating words for your typing test...{Style.RESET_ALL}")
+        print()
         
         self.generate_words()
         self.display_game_state()
-        
-        print(f"\n{Fore.GREEN}Ready! Start typing to begin the test.{Style.RESET_ALL}")
-        print(f"{Fore.RED}Press ESC to quit | TAB to restart{Style.RESET_ALL}")
         
         # Main input loop
         try:
@@ -625,9 +761,54 @@ class TypingRaceGame:
             print(f"{Fore.GREEN}Game exited successfully.{Style.RESET_ALL}")
 
 
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="MonkeyType-inspired terminal typing speed test",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python typegame.py                    # Default: 60 second test
+  python typegame.py 30                 # 30 second test
+  python typegame.py 120 myrecord.txt   # 2 minute test with custom PB file
+        """
+    )
+    
+    parser.add_argument(
+        'duration', 
+        type=int, 
+        nargs='?', 
+        default=60,
+        help='Test duration in seconds (default: 60)'
+    )
+    
+    parser.add_argument(
+        'pbfile', 
+        type=str, 
+        nargs='?', 
+        default='personal_best.txt',
+        help='Personal best record file path (default: personal_best.txt)'
+    )
+    
+    return parser.parse_args()
+
+
 def main():
     """Main function to run the typing race game."""
     try:
+        # Parse command line arguments
+        args = parse_arguments()
+        
+        # Update global constants based on arguments
+        global TEST_DURATION, PB_FILENAME
+        TEST_DURATION = args.duration
+        PB_FILENAME = args.pbfile
+        
+        print(f"{Fore.CYAN}Typing Race Configuration:{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Test Duration: {TEST_DURATION} seconds{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Personal Best File: {PB_FILENAME}{Style.RESET_ALL}")
+        print()
+        
         game = TypingRaceGame()
         game.run()
     except Exception as e:
