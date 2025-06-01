@@ -71,4 +71,4 @@ Code was refactored (functions names, comments, etc) using AI. Take care, someti
 
 ---
 
-*Built with Python because sometimes you just want to stay in the terminal.* 
+*Built with Python because it's quick.* 
